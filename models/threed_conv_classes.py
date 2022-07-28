@@ -9,7 +9,7 @@ class Conv3dBlock(nn.Module):
         self.mod = nn.Sequential(
             nn.Conv3d(input_channels, output_channels,
                       kernel_size=kernel_size, padding=padding, stride=stride),
-            nn.BatchNorm3d(self.output_channels),
+            nn.BatchNorm3d(output_channels),
             nn.LeakyReLU(0.2)
         )
         
@@ -25,7 +25,7 @@ class Conv3dDownsample(nn.Module):
             nn.Conv3d(input_channels, output_channels,
                       stride=(1, 2, 2),
                       kernel_size=(3,3,3), padding=(1,1,1)),
-            nn.BatchNorm3d(self.output_channels),
+            nn.BatchNorm3d(output_channels),
             nn.LeakyReLU(0.2)
         )
         
@@ -41,7 +41,7 @@ class ConvTranspose3dBlock(nn.Module):
             nn.ConvTranspose3d(input_channels, output_channels,
                                kernel_size=kernel_size, padding=padding, 
                                stride=stride),
-            nn.BatchNorm3d(self.output_channels),
+            nn.BatchNorm3d(output_channels),
             nn.LeakyReLU(0.2)
         )
         
@@ -56,14 +56,14 @@ class ConvTranspose3dUpsample(nn.Module):
         self.mod = nn.Sequential(
             nn.ConvTranspose3d(input_channels, output_channels,
                                stride=(1,2,2),kernel_size=(3,3,3), padding=(1,1,1), output_padding=(0,1,1)),
-            nn.BatchNorm3d(self.output_channels),
+            nn.BatchNorm3d(output_channels),
             nn.LeakyReLU(0.2)
         )
         
     def forward(self, x):
         return self.mod(x)
 
-class ThreeDConvWideTwoDeepTwo(nn.Module):
+class ThreeDConvDeepTwo(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         
@@ -80,6 +80,29 @@ class ThreeDConvWideTwoDeepTwo(nn.Module):
             ConvTranspose3dUpsample(16),
             ConvTranspose3dBlock(8, 8), ConvTranspose3dBlock(8, 8),
             nn.Conv3d(8, 1, kernel_size = (1,1,1)),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.mod(x)
+
+class ThreeDConvWideFourDeepThree(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        
+        self.mod = nn.Sequential(
+            Conv3dBlock(1, 32), 
+            Conv3dBlock(32, 32), Conv3dBlock(32, 32), Conv3dBlock(32, 32),
+            Conv3dDownsample(32),
+            Conv3dBlock(64, 64), Conv3dBlock(64, 64), Conv3dBlock(64, 64),
+            Conv3dDownsample(64),
+            Conv3dBlock(128, 128), Conv3dBlock(128, 128),
+            ConvTranspose3dBlock(128, 128), ConvTranspose3dBlock(128, 128),
+            ConvTranspose3dUpsample(128),
+            ConvTranspose3dBlock(64, 64), ConvTranspose3dBlock(64, 64),
+            ConvTranspose3dUpsample(64),
+            ConvTranspose3dBlock(32, 32), ConvTranspose3dBlock(32, 32),
+            nn.Conv3d(32, 1, kernel_size = (1,1,1)),
             nn.Sigmoid(),
         )
 

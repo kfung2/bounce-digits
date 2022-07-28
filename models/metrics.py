@@ -33,8 +33,8 @@ class PSNR(nn.Module):
         for vid_idx in range(N):
             for frame_idx in range(F):
                 psnr = peak_signal_noise_ratio(
-                    pred_frames[vid_idx, :, frame_idx].numpy(),
-                    target_frames[vid_idx, :, frame_idx].numpy(),
+                    pred_frames[vid_idx, :, frame_idx].detach().cpu().numpy(),
+                    target_frames[vid_idx, :, frame_idx].detach().cpu().numpy(),
                     data_range=1.0
                 )
                 out[vid_idx, frame_idx] = psnr
@@ -50,8 +50,8 @@ class SSIM(nn.Module):
         for vid_idx in range(N):
             for frame_idx in range(F):
                 ssim = structural_similarity(
-                    pred_frames[vid_idx, :, frame_idx].numpy().squeeze(),
-                    target_frames[vid_idx, :, frame_idx].numpy().squeeze(),
+                    pred_frames[vid_idx, :, frame_idx].detach().cpu().numpy().squeeze(),
+                    target_frames[vid_idx, :, frame_idx].detach().cpu().numpy().squeeze(),
                     data_range=1.0
                 )
                 out[vid_idx, frame_idx] = ssim

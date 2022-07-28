@@ -3,13 +3,17 @@ import torch.nn as nn
 import pytorch_lightning as pl
 
 from models.threed_conv_classes import *
+from models.metrics import *
+from models.logging import *
 
 class ThreeDConv(pl.LightningModule):
     def __init__(self, learning_rate=1e-3):
         super().__init__()
 
-        self.mod = ThreeDConvWideTwoDeepTwo()
+        self.mod = ThreeDConvWideFourDeepThree()
         self.mse = nn.MSELoss()
+        self.psnr = PSNR()
+        self.ssim = SSIM()
         self.learning_rate = learning_rate
     
     def forward(self, x):
@@ -25,20 +29,43 @@ class ThreeDConv(pl.LightningModule):
                 }
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        outputs = self.forward(x)
-        loss = self.mse(outputs, y)
+        ctx_frames, tgt_frames = batch
+        outputs = self.forward(ctx_frames)
+        loss = self.mse(outputs, tgt_frames)
         self.log('train_loss', loss, 
                  on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
-        outputs = self.forward(x)
-        loss = self.mse(outputs, y)
+        ctx_frames, tgt_frames = batch
+        pred_frames = self.forward(ctx_frames)
+        loss = self.mse(tgt_frames, pred_frames)
+        ssim = self.ssim(tgt_frames, pred_frames)
+        psnr = self.psnr(tgt_frames, pred_frames)
+        self.log_dict(
+            {"val_loss": loss,
+             "val_ssim": ssim,
+             "val_psnr": psnr
+            }, on_step=False, on_epoch=True, prog_bar=False)   
 
-        self.log_dict({"val_loss": loss}, on_step=False, on_epoch=True, prog_bar=False)         
-        return loss
+        return ctx_frames, tgt_frames, pred_frames
+
+    def validation_epoch_end(self, validation_step_outputs):
+        # Add plot to logger every 5 epochs
+        if (self.current_epoch+1) % 5 == 0:
+            # first batch in validation dataset
+            batch_ctx, batch_tgt, batch_pred = validation_step_outputs[0]
+            # first video
+            ctx_frames = batch_ctx[0]
+            tgt_frames = batch_tgt[0]
+            pred_frames = batch_pred[0] # C x F x H x W
+
+            img = make_plot_image(ctx_frames, tgt_frames,
+                                    pred_frames, epoch=self.current_epoch+1)
+            
+            tb = self.logger.experiment
+            tb.add_image("val_predictions", img, global_step=self.current_epoch)
+
         
         
