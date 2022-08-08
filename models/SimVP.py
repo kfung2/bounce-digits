@@ -3,7 +3,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 
 from models.metrics import *
-from models.logging import *
+from models.logging_utils import *
 
 class BasicConv2d(nn.Module):
     # B, C_in, H, W -> B, C_out, H', W'
@@ -101,7 +101,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         enc1 = self.enc[0](x)  
         # Skip connection; Output of first encoding layer is 
-        # appended to input to decoder
+        # appended as input to decoder
         latent = enc1
         for i in range(1, len(self.enc)):
             latent = self.enc[i](latent)
@@ -115,7 +115,10 @@ class Decoder(nn.Module):
             *[ConvSC(hidden_channels, hidden_channels, stride=s, transpose=True) for s in strides[:-1]],
             ConvSC(2*hidden_channels, hidden_channels, stride=strides[-1], transpose=True)
         )
-        self.readout = nn.Conv2d(hidden_channels, out_channels, kernel_size=1)
+        self.readout = nn.Sequential(
+            nn.Conv2d(hidden_channels, out_channels, kernel_size=1),
+            nn.Sigmoid()
+            )
 
     def forward(self, hid, enc1=None):
         for i in range(0, len(self.dec)-1):

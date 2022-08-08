@@ -49,10 +49,18 @@ class SSIM(nn.Module):
         out = np.zeros((N, F))
         for vid_idx in range(N):
             for frame_idx in range(F):
-                ssim = structural_similarity(
-                    pred_frames[vid_idx, :, frame_idx].detach().cpu().numpy().squeeze(),
-                    target_frames[vid_idx, :, frame_idx].detach().cpu().numpy().squeeze(),
-                    data_range=1.0
+                if C == 1:
+                    ssim = structural_similarity(
+                        pred_frames[vid_idx, :, frame_idx].detach().cpu().numpy().squeeze(),
+                        target_frames[vid_idx, :, frame_idx].detach().cpu().numpy().squeeze(),
+                        data_range=1.0
+                    )
+                else:
+                    ssim = structural_similarity(
+                    pred_frames[vid_idx, :, frame_idx].detach().cpu().numpy(),
+                    target_frames[vid_idx, :, frame_idx].detach().cpu().numpy(),
+                    data_range=1.0,
+                    channel_axis=0
                 )
                 out[vid_idx, frame_idx] = ssim
         return out.mean()

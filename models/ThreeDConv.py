@@ -4,13 +4,13 @@ import pytorch_lightning as pl
 
 from models.threed_conv_classes import *
 from models.metrics import *
-from models.logging import *
+from models.logging_utils import *
 
 class ThreeDConv(pl.LightningModule):
     def __init__(self, learning_rate=1e-3):
         super().__init__()
 
-        self.mod = ThreeDConvWideFourDeepThree()
+        self.mod = ThreeDConvWideFourDeepThreeSkipRGB()
         self.mse = nn.MSELoss()
         self.psnr = PSNR()
         self.ssim = SSIM()

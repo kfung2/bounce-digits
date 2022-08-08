@@ -3,17 +3,17 @@ import torch.nn as nn
 import pytorch_lightning as pl
 
 from models.metrics import *
-from models.logging import *
+from models.logging_utils import *
 
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_dim, hidden_dim, frame_dim,
-                 kernel_size, padding):
+                 kernel_size, padding, activation="relu"):
         super().__init__()
 
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.kernel_size = kernel_size
-
+        self.activation = nn.ReLU() if activation == "relu" else nn.Tanh()
         self.conv = nn.Conv2d(in_channels=input_dim+hidden_dim,
                               out_channels=4*hidden_dim,
                               kernel_size=kernel_size,
@@ -24,8 +24,6 @@ class ConvLSTMCell(nn.Module):
         self.W_o = nn.Parameter(torch.Tensor(hidden_dim, *frame_dim))
 
     def forward(self, x, h_prev, c_prev):
-        print(f"x device: {x.device}")
-        print(f"h_prev device: {h_prev.device}")
         combined = torch.cat([x, h_prev], dim=1)
         conv_output = self.conv(combined)
 
@@ -34,9 +32,9 @@ class ConvLSTMCell(nn.Module):
         i_curr = torch.sigmoid(i_conv + self.W_i * c_prev)
         f_curr = torch.sigmoid(f_conv + self.W_f * c_prev)
 
-        c_curr = (f_curr * c_prev) + (i_curr * nn.Tanh()(c_conv))
+        c_curr = (f_curr * c_prev) + (i_curr * self.activation(c_conv))
         o_curr = torch.sigmoid(o_conv + self.W_o * c_curr)
-        h_curr = o_curr * nn.Tanh()(c_curr)
+        h_curr = o_curr * self.activation(c_curr)
 
         return h_curr, c_curr
 
@@ -53,7 +51,7 @@ class ConvLSTM(nn.Module):
 
     def forward(self, x):
         # device = torch.device('cuda' if torch.cuda.is_available() and self.training else 'cpu')
-        print(f"ConvLSTM device: {self.device}")
+        # print(f"ConvLSTM device: {self.device}")
         bs, c, f, h, w = x.shape
 
         # Space to store output
@@ -75,17 +73,19 @@ class ConvLSTM(nn.Module):
 class EncoderDecoderConvLSTM(pl.LightningModule):
     def __init__(self, input_dim, hidden_dim, frame_dim,
                  kernel_size, padding,
-                 num_lstm_layers, learning_rate=1e-3):
+                 num_lstm_layers, learning_rate=1e-3, training=True):
         super().__init__()
         self.save_hyperparameters()
 
-        self.loss = nn.MSELoss()
+        self.mse = nn.MSELoss()
         self.ssim = SSIM()
         self.psnr = PSNR()
         self.learning_rate = learning_rate
 
         self.mod = nn.Sequential()
-        self.print_device()
+        #self.print_device()
+
+        device = 'cuda' if training else 'cpu'
         self.mod.add_module(
             "convlstm1", ConvLSTM(
                 input_dim=input_dim, 
@@ -93,7 +93,7 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
                 frame_dim=frame_dim,
                 kernel_size=kernel_size,
                 padding=padding,
-                device=self.device
+                device=device
             )
         )
 
@@ -109,7 +109,7 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
                 frame_dim=frame_dim,
                 kernel_size=kernel_size,
                 padding=padding,
-                device=self.device
+                device=device
                 )
             )
 
@@ -163,7 +163,7 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
         print(f"self.device: {self.device}")
 
     def forward(self, x):
-        print(f"encdec device: {self.device}")
+        #print(f"encdec device: {self.device}")
 
         conv_lstm_output = self.mod(x)
         # Last hidden state will be used for predicting next frame
@@ -191,13 +191,16 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         ctx_frames, tgt_frames = batch
         tgt_frame = tgt_frames[:, :, 0, :, :]
-        pred_frame = self.forward(ctx_frames)
         # loss = self.mse(pred_frame, tgt_frames)
         # self.log('train_loss', loss,
         #          prog_bar=False)
         # return loss
-
+        pred_frame = self.forward(ctx_frames)
         loss = self.mse(tgt_frame, pred_frame)
+        
+        tgt_frame = tgt_frame.unsqueeze(2)
+        pred_frame = pred_frame.unsqueeze(2)
+
         ssim = self.ssim(tgt_frame, pred_frame)
         psnr = self.psnr(tgt_frame, pred_frame)
         self.log_dict(
@@ -205,6 +208,8 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
              "val_ssim": ssim,
              "val_psnr": psnr
             }, on_step=False, on_epoch=True, prog_bar=False) 
+
+        return ctx_frames, tgt_frame, pred_frame
 
     def validation_epoch_end(self, validation_step_outputs):
         # Add plot to logger every 5 epochs
@@ -214,12 +219,15 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
             # first video
             ctx_frames = batch_ctx[0]    # C x F x H x W
             tgt_frame = batch_tgt[0]     # C x H x W
+            #tgt_frame = tgt_frame.unsqueeze(1)
+            tgt_frames = tgt_frame.expand(-1, 5, -1, -1)
             
             pred_frame = batch_pred[0]  # C x H x W
-            print(f'tgt_frame.shape: {tgt_frame}')
-            print(f'pred_frame.shape: {pred_frame}')
-            img = make_plot_image(ctx_frames, tgt_frame,
-                                    pred_frame, epoch=self.current_epoch+1)
+           # pred_frame = pred_frame.unsqueeze(1)
+            pred_frames = pred_frame.expand(-1, 5, -1, -1)  # C x F x H x W
+    
+            img = make_plot_image(ctx_frames, tgt_frames,
+                                  pred_frames, epoch=self.current_epoch+1)
             
             tb = self.logger.experiment
             tb.add_image("val_predictions", img, global_step=self.current_epoch)
