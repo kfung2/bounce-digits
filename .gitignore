@@ -1,4 +1,5 @@
 data/*.npy
+data/MNIST/*
 logs/*
 */__pycache__/*
 __pycache__/*
