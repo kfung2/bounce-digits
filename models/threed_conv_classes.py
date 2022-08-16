@@ -91,7 +91,7 @@ class ThreeDConvWideFourDeepThree(nn.Module):
         super().__init__()
         
         self.mod = nn.Sequential(
-            Conv3dBlock(1, 32), 
+            Conv3dBlock(3, 32), 
             Conv3dBlock(32, 32), Conv3dBlock(32, 32), Conv3dBlock(32, 32),
             Conv3dDownsample(32),
             Conv3dBlock(64, 64), Conv3dBlock(64, 64), Conv3dBlock(64, 64),
@@ -102,7 +102,7 @@ class ThreeDConvWideFourDeepThree(nn.Module):
             ConvTranspose3dBlock(64, 64), ConvTranspose3dBlock(64, 64),
             ConvTranspose3dUpsample(64),
             ConvTranspose3dBlock(32, 32), ConvTranspose3dBlock(32, 32),
-            nn.Conv3d(32, 1, kernel_size = (1,1,1)),
+            nn.Conv3d(32, 3, kernel_size = (1,1,1)),
             nn.Sigmoid(),
         )
 

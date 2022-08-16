@@ -1,174 +1,145 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+from .ConvLSTM_old import ConvLSTM
 
 from models.metrics import *
 from models.logging_utils import *
 
+# Code inspired by https://github.com/holmdk/Video-Prediction-using-PyTorch
 class ConvLSTMCell(nn.Module):
-    def __init__(self, input_dim, hidden_dim, frame_dim,
-                 kernel_size, padding, activation="relu"):
+
+    def __init__(self, input_dim, hidden_dim, kernel_size, bias):
+        """
+        Initialize ConvLSTM cell.
+        Parameters
+        ----------
+        input_dim: int
+            Number of channels of input tensor.
+        hidden_dim: int
+            Number of channels of hidden state.
+        kernel_size: (int, int)
+            Size of the convolutional kernel.
+        bias: bool
+            Whether or not to add the bias.
+        """
+
         super().__init__()
 
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+
         self.kernel_size = kernel_size
-        self.activation = nn.ReLU() if activation == "relu" else nn.Tanh()
-        self.conv = nn.Conv2d(in_channels=input_dim+hidden_dim,
-                              out_channels=4*hidden_dim,
+        self.padding = kernel_size[0] // 2, kernel_size[1] // 2
+        self.bias = bias
+
+        self.conv = nn.Conv2d(in_channels=input_dim + hidden_dim,
+                              out_channels=4 * hidden_dim,
                               kernel_size=kernel_size,
-                              padding=padding)
+                              padding=self.padding,
+                              bias=bias)
 
-        self.W_i = nn.Parameter(torch.Tensor(hidden_dim, *frame_dim))
-        self.W_f = nn.Parameter(torch.Tensor(hidden_dim, *frame_dim))
-        self.W_o = nn.Parameter(torch.Tensor(hidden_dim, *frame_dim))
+    def forward(self, input_tensor, h_curr, c_curr):
 
-    def forward(self, x, h_prev, c_prev):
-        combined = torch.cat([x, h_prev], dim=1)
-        conv_output = self.conv(combined)
+        combined = torch.cat([input_tensor, h_curr], dim=1)  # concatenate along channel axis
 
-        i_conv, f_conv, c_conv, o_conv = torch.chunk(conv_output, chunks=4, dim=1)
+        combined_conv = self.conv(combined)
+        cc_i, cc_f, cc_o, cc_g = torch.split(combined_conv, self.hidden_dim, dim=1)
+        i = torch.sigmoid(cc_i)
+        f = torch.sigmoid(cc_f)
+        o = torch.sigmoid(cc_o)  # Inconsistent with ConvLSTM equations on blog
+        g = torch.tanh(cc_g)
 
-        i_curr = torch.sigmoid(i_conv + self.W_i * c_prev)
-        f_curr = torch.sigmoid(f_conv + self.W_f * c_prev)
+        c_next = f * c_curr + i * g
+        h_next = o * torch.tanh(c_next)
 
-        c_curr = (f_curr * c_prev) + (i_curr * self.activation(c_conv))
-        o_curr = torch.sigmoid(o_conv + self.W_o * c_curr)
-        h_curr = o_curr * self.activation(c_curr)
+        return h_next, c_next
 
-        return h_curr, c_curr
-
-class ConvLSTM(nn.Module):
-    def __init__(self, input_dim, hidden_dim, frame_dim,
-                 kernel_size, padding, device):
-        super().__init__()
-
-        self.hidden_dim = hidden_dim
-        self.convLSTM_cell = ConvLSTMCell(input_dim, hidden_dim, frame_dim,
-                                          kernel_size, padding)
-        self.device = device
-
-
-    def forward(self, x):
-        # device = torch.device('cuda' if torch.cuda.is_available() and self.training else 'cpu')
-        # print(f"ConvLSTM device: {self.device}")
-        bs, c, f, h, w = x.shape
-
-        # Space to store output
-        output = torch.zeros(bs, self.hidden_dim, f, h, w, device=self.device)
-
-        # Initialise hidden state and cell state
-        hidden_state = torch.zeros(bs, self.hidden_dim, h, w, device=self.device)
-        cell_state = torch.zeros(bs, self.hidden_dim, h, w, device=self.device)
-
-        # Iterate over frames
-        for time_step in range(f):
-
-            hidden_state, cell_state = self.convLSTM_cell(x[:, :, time_step, :, :], hidden_state, cell_state)
-
-            output[:, :, time_step, :, :] = hidden_state
-        
-        return output
+    def init_hidden(self, batch_size, image_size):
+        height, width = image_size
+        return (torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device),
+                torch.zeros(batch_size, self.hidden_dim, height, width, device=self.conv.weight.device))
 
 class EncoderDecoderConvLSTM(pl.LightningModule):
-    def __init__(self, input_dim, hidden_dim, frame_dim,
-                 kernel_size, padding,
-                 num_lstm_layers, learning_rate=1e-3, training=True):
+    def __init__(self, input_dim, hidden_dim, output_dim, kernel_size, bias,
+                 num_tgt_frames=5,
+                 learning_rate=1e-3):
         super().__init__()
-        self.save_hyperparameters()
-
+        
         self.mse = nn.MSELoss()
         self.ssim = SSIM()
         self.psnr = PSNR()
         self.learning_rate = learning_rate
+        self.num_tgt_frames = num_tgt_frames
 
-        self.mod = nn.Sequential()
-        #self.print_device()
+        self.encoder_1 = ConvLSTMCell(input_dim=input_dim,
+                                      hidden_dim=hidden_dim,
+                                      kernel_size=kernel_size,
+                                      bias=bias)
+    
+        self.encoder_2 = ConvLSTMCell(input_dim=hidden_dim,
+                                  hidden_dim=hidden_dim,
+                                  kernel_size=kernel_size,
+                                  bias=bias)
 
-        device = 'cuda' if training else 'cpu'
-        self.mod.add_module(
-            "convlstm1", ConvLSTM(
-                input_dim=input_dim, 
-                hidden_dim=hidden_dim, 
-                frame_dim=frame_dim,
-                kernel_size=kernel_size,
-                padding=padding,
-                device=device
-            )
-        )
+        self.decoder_1 = ConvLSTMCell(input_dim=hidden_dim,
+                                  hidden_dim=hidden_dim,
+                                  kernel_size=kernel_size,
+                                  bias=bias)
+        
+        self.decoder_2 = ConvLSTMCell(input_dim=hidden_dim,
+                                  hidden_dim=hidden_dim,
+                                  kernel_size=kernel_size,
+                                  bias=bias)
+        
+        self.decoder_CNN = nn.Conv3d(in_channels=hidden_dim,
+                                     out_channels=output_dim,
+                                     kernel_size=(1, 3, 3),
+                                     padding=(0, 1, 1))
+        
+    
+    def autoencoder(self, x, num_ctx_frames, num_tgt_frames, h_t, c_t, h_t2, c_t2, h_t3, c_t3, h_t4, c_t4):
 
-        self.mod.add_module(
-            "batchnorm1", nn.BatchNorm3d(num_features=hidden_dim)
-        )
+        outputs = []
 
-        for i in range(2, num_lstm_layers + 1):
-            self.mod.add_module(
-                f"convlstm{i}", ConvLSTM(
-                input_dim=hidden_dim, 
-                hidden_dim=hidden_dim, 
-                frame_dim=frame_dim,
-                kernel_size=kernel_size,
-                padding=padding,
-                device=device
-                )
-            )
+        # encoder
+        for t in range(num_ctx_frames):
+            h_t, c_t = self.encoder_1(input_tensor=x[:, :, t],
+                                      h_curr=h_t, c_curr=c_t)
+            h_t2, c_t2 = self.encoder_2(input_tensor=h_t,
+                                        h_curr=h_t2, c_curr=c_t2)  
 
-            self.mod.add_module(
-                f"batchnorm{i}", nn.BatchNorm3d(num_features=hidden_dim)
-            )
+        # encoder_vector
+        encoder_vector = h_t2
 
-        self.conv1 = nn.Conv2d(in_channels=hidden_dim, 
-            out_channels=input_dim,
-            kernel_size=kernel_size,
-            padding=padding
-        )
-        # self.conv = nn.Sequential(
-        #     nn.Conv2d(in_channels=hidden_dim, 
-        #     out_channels=hidden_dim/2,
-        #     kernel_size=kernel_size,
-        #     padding=padding),
-        #     nn.Conv2d(in_channels=hidden_dim/2, 
-        #     out_channels=hidden_dim/4,
-        #     kernel_size=kernel_size,
-        #     padding=padding),
-        #     nn.Conv2d(in_channels=hidden_dim/4, 
-        #     out_channels=input_dim,
-        #     kernel_size=kernel_size,
-        #     padding=padding)
-        # )
+        # decoder
+        for t in range(num_tgt_frames):
+            h_t3, c_t3 = self.decoder_1(input_tensor=encoder_vector,
+                                        h_curr=h_t3, c_curr=c_t3) 
+            h_t4, c_t4 = self.decoder_2(input_tensor=h_t3,
+                                        h_curr=h_t4, c_curr=c_t4)  
+            outputs += [h_t4]  # predictions
 
+        outputs = torch.stack(outputs, 1)
+        outputs = outputs.permute(0, 2, 1, 3, 4)
+        outputs = self.decoder_CNN(outputs)
+        outputs = torch.nn.Sigmoid()(outputs)
 
-        # self.conv = nn.Sequential()
-        # self.conv.add_module(
-        #     "conv1", nn.Conv2d(
-        #         in_channels=hidden_dim, out_channels=hidden_dim / 2,
-        #         kernel_size=kernel_size,
-        #         padding=padding)
-        # )
-
-        # self.conv.add_module(
-        #     "conv2", nn.Conv2d(
-        #         in_channels=hidden_dim / 2, out_channels=hidden_dim / 4,
-        #         kernel_size=kernel_size,
-        #         padding=padding)
-        # )
-
-        # self.conv.add_module(
-        #     "conv3", nn.Conv2d(
-        #         in_channels=hidden_dim / 4, out_channels=input_dim,
-        #         kernel_size=kernel_size,
-        #         padding=padding)
-        # )
-    def print_device(self):
-        print(f"self.device: {self.device}")
+        return outputs
 
     def forward(self, x):
-        #print(f"encdec device: {self.device}")
+        B, C, num_ctx_frames, H, W = x.shape
 
-        conv_lstm_output = self.mod(x)
-        # Last hidden state will be used for predicting next frame
-        pred_frame = self.conv1(conv_lstm_output[:, :, -1, :, :])
-        return pred_frame
+        # initialize hidden states
+        h_t, c_t = self.encoder_1.init_hidden(batch_size=B, image_size=(H, W))
+        h_t2, c_t2 = self.encoder_2.init_hidden(batch_size=B, image_size=(H, W))
+        h_t3, c_t3 = self.decoder_1.init_hidden(batch_size=B, image_size=(H, W))
+        h_t4, c_t4 = self.decoder_2.init_hidden(batch_size=B, image_size=(H, W))
+
+        # autoencoder forward
+        outputs = self.autoencoder(x, num_ctx_frames, self.num_tgt_frames, h_t, c_t, h_t2, c_t2, h_t3, c_t3, h_t4, c_t4)
+
+        return outputs
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr = self.learning_rate)
@@ -179,37 +150,29 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
                 }
 
     def training_step(self, batch, batch_idx):
-        ctx_frames, tgt_frames = batch
-        tgt_frames = tgt_frames[:, :, 0, :, :]
-        pred_frame = self.forward(ctx_frames)
-        loss = self.mse(pred_frame, tgt_frames)
+        ctx_frames, tgt_frames = batch  # B x C x F x H x W
+        pred_frames = self.forward(ctx_frames)
+        loss = self.mse(pred_frames[:, :, 0], tgt_frames[:, :, 0])
+        # loss = self.mse(pred_frames, tgt_frames)
+
         self.log('train_loss', loss,
                  prog_bar=False)
         return loss
 
-        
     def validation_step(self, batch, batch_idx):
         ctx_frames, tgt_frames = batch
-        tgt_frame = tgt_frames[:, :, 0, :, :]
-        # loss = self.mse(pred_frame, tgt_frames)
-        # self.log('train_loss', loss,
-        #          prog_bar=False)
-        # return loss
-        pred_frame = self.forward(ctx_frames)
-        loss = self.mse(tgt_frame, pred_frame)
-        
-        tgt_frame = tgt_frame.unsqueeze(2)
-        pred_frame = pred_frame.unsqueeze(2)
+        pred_frames = self.forward(ctx_frames)
 
-        ssim = self.ssim(tgt_frame, pred_frame)
-        psnr = self.psnr(tgt_frame, pred_frame)
+        loss = self.mse(tgt_frames, pred_frames)
+        ssim = self.ssim(tgt_frames, pred_frames)
+        psnr = self.psnr(tgt_frames, pred_frames)
         self.log_dict(
             {"val_loss": loss,
              "val_ssim": ssim,
              "val_psnr": psnr
-            }, on_step=False, on_epoch=True, prog_bar=False) 
+            }, on_step=False, on_epoch=True, prog_bar=False)  
 
-        return ctx_frames, tgt_frame, pred_frame
+        return ctx_frames, tgt_frames, pred_frames
 
     def validation_epoch_end(self, validation_step_outputs):
         # Add plot to logger every 5 epochs
@@ -217,19 +180,12 @@ class EncoderDecoderConvLSTM(pl.LightningModule):
             # first batch in validation dataset
             batch_ctx, batch_tgt, batch_pred = validation_step_outputs[0]
             # first video
-            ctx_frames = batch_ctx[0]    # C x F x H x W
-            tgt_frame = batch_tgt[0]     # C x H x W
-            #tgt_frame = tgt_frame.unsqueeze(1)
-            tgt_frames = tgt_frame.expand(-1, 5, -1, -1)
-            
-            pred_frame = batch_pred[0]  # C x H x W
-           # pred_frame = pred_frame.unsqueeze(1)
-            pred_frames = pred_frame.expand(-1, 5, -1, -1)  # C x F x H x W
-    
+            ctx_frames = batch_ctx[0]
+            tgt_frames = batch_tgt[0]
+            pred_frames = batch_pred[0] # C x F x H x W
+
             img = make_plot_image(ctx_frames, tgt_frames,
-                                  pred_frames, epoch=self.current_epoch+1)
+                                    pred_frames, epoch=self.current_epoch+1)
             
             tb = self.logger.experiment
             tb.add_image("val_predictions", img, global_step=self.current_epoch)
-
-

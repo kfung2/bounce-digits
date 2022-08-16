@@ -9,14 +9,13 @@ from data.data_classes import *
 # Configs
 batch_size = 16
 learning_rate = 1e-3
-epochs = 50
+epochs = 100
 
 num_ctx_frames = 5
 num_tgt_frames = 5
 
 model = ThreeDConv(learning_rate)
-moving_mnist = MovingMNISTDataModule(batch_size, num_ctx_frames, num_tgt_frames,
-                                     split_ratio=[0.7, 0.2, 0.1])
+moving_mnist = MovingMNISTDataModule(batch_size, num_ctx_frames, num_tgt_frames)
 
 logger = TensorBoardLogger('./logs', 'ThreeDConv')
 

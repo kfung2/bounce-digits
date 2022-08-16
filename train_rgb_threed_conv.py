@@ -7,16 +7,15 @@ from models import *
 from data.data_classes import *
 
 # Configs
-batch_size = 8
+batch_size = 4
 learning_rate = 1e-3
-epochs = 50
+epochs = 100
 
 num_ctx_frames = 5
 num_tgt_frames = 5
 
 model = ThreeDConv(learning_rate)
-moving_mnist = TwoColourMovingMNISTDataModule(batch_size, num_ctx_frames, num_tgt_frames,
-                                              split_ratio=[0.4, 0.1, 0.5])
+moving_mnist = TwoColourMovingMNISTDataModule(batch_size, num_ctx_frames, num_tgt_frames)
 
 logger = TensorBoardLogger('./logs', 'ThreeDConv_RGB')
 
