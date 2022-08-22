@@ -5,3 +5,4 @@ from models.ConvLSTM import *
 from models.GAN import *
 from models.drnet_classes import *
 from models.DRNet import *
+from models.PredRNN import *

@@ -72,9 +72,46 @@ def fig2image(fig):
     img = torchvision.transforms.ToTensor()(img)
     return img
 
+def make_ten_frame_plot(ctx, tgt, pred, epoch=999):
+    num_ctx_frames= ctx.shape[1]
+    num_tgt_frames = tgt.shape[1]
+
+    def show_frames(frames, ax, row_label=None):
+        for i, frame in enumerate(frames):
+            ax[i+num_ctx_frames].imshow(frame)
+            ax[i+num_ctx_frames].set_xticks([])
+            ax[i+num_ctx_frames].set_yticks([])
+
+        if row_label is not None:
+            ax[0].set_ylabel(row_label)
+
+    ctx_frames = ctx.permute(1, 2, 3, 0).cpu().numpy()
+    tgt_frames = tgt.squeeze().permute(1, 2, 3, 0).cpu().numpy()
+    pred_frames = pred.squeeze().permute(1, 2, 3, 0).cpu().numpy()
+
+    fig, ax = plt.subplots(2, 10,
+                       figsize = (10, 3))
+    fig.suptitle(f"EPOCH {epoch}", y=0.93)
+
+    for i, frame in enumerate(ctx_frames):
+        ax[0][i].imshow(frame)
+        ax[0][i].set_xticks([])
+        ax[0][i].set_yticks([])
+
+        ax[1][i].imshow(frame)
+        ax[1][i].set_xticks([])
+        ax[1][i].set_yticks([])
+
+    show_frames(tgt_frames, ax[0])
+    show_frames(pred_frames, ax[1])
+
+    return fig
+
 def make_plot_image(ctx, tgt, pred, epoch, cmap='gray'):
     if ctx.shape[0] == 1:
         return fig2image(make_plot(ctx, tgt, pred, epoch, cmap='gray'))
     else:
-        return fig2image(make_rgb_plot(ctx, tgt, pred, epoch))
-
+        if ctx.shape[1] < 5:
+            return fig2image(make_ten_frame_plot(ctx, tgt, pred, epoch))
+        else:
+            return fig2image(make_rgb_plot(ctx, tgt, pred, epoch))

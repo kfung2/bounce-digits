@@ -229,6 +229,7 @@ class TwoColourMovingMNISTDataset(Dataset):
             ts = transforms.ToTensor()(x[self.num_ctx_frames + j])
             target_frames[:, j] = ts
         
+        # C x F x H x W
         return context_frames, target_frames
 
 class TwoColourMovingMNISTDataModule(pl.LightningDataModule):
@@ -257,16 +258,16 @@ class TwoColourMovingMNISTDataModule(pl.LightningDataModule):
         return DataLoader(self.train,
                           batch_size = self.batch_size,
                           shuffle = True,
-                          num_workers=8)
+                          num_workers=4)
 
     def val_dataloader(self):
         return DataLoader(self.val,
                          batch_size = self.batch_size,
                          shuffle = False,
-                         num_workers=8)
+                         num_workers=4)
 
     def test_dataloader(self):
         return DataLoader(self.test,
                           batch_size = self.batch_size,
                           shuffle = False,
-                          num_workers=8)
+                          num_workers=4)
