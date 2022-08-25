@@ -7,18 +7,19 @@ from models import *
 from data.data_classes import *
 
 # Configs
-batch_size = 16
+batch_size = 4
 learning_rate = 1e-3
 epochs = 100
 
 num_ctx_frames = 5
 num_tgt_frames = 5
+split_ratio=[0.4, 0.1, 0.5]
 
 hid_s=64
 hid_t=256
 N_s=4
 N_t=8
-kernel_sizes=[3,5,11,13]
+kernel_sizes=[3,5,7,11]
 groups=4
 
 channels = 3
@@ -33,7 +34,9 @@ model = SimVP(input_shape=input_shape,
               groups=groups,
               learning_rate=learning_rate)
 
-moving_mnist = TwoColourMovingMNISTDataModule(batch_size, num_ctx_frames, num_tgt_frames)
+moving_mnist = TwoColourMovingMNISTDataModule(batch_size, 
+                                              num_ctx_frames, num_tgt_frames,
+                                              split_ratio=split_ratio)
 
 logger = TensorBoardLogger('./logs', 'SimVP_RGB')
 

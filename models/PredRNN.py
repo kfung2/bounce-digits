@@ -88,12 +88,6 @@ class PredRNN(pl.LightningModule):
                 SpatioTemporalLSTMCell(in_channel, num_hidden[i], kernel_size, stride)
             )
         self.cell_list = nn.ModuleList(cell_list)
-        # self.conv_last = nn.Sequential(
-        #     nn.Conv2d(num_hidden[self.num_layers - 1], 
-        #                            input_channels,
-        #                            kernel_size=1, stride=1, padding=0, bias=False),
-        #     nn.Sigmoid()
-        #     )
         self.conv_last = nn.Conv2d(num_hidden[self.num_layers - 1], 
                                    input_channels,
                                    kernel_size=1, stride=1, padding=0, bias=False)

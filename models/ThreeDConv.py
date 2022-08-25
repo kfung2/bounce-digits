@@ -10,7 +10,7 @@ class ThreeDConv(pl.LightningModule):
     def __init__(self, learning_rate=1e-3):
         super().__init__()
 
-        self.mod = ThreeDConvWideFourDeepThreeSkipAutoregRGB()
+        self.mod = ThreeDConvWideFourDeepThreeSkipRGB()
         self.mse = nn.MSELoss()
         self.psnr = PSNR()
         self.ssim = SSIM()
