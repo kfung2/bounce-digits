@@ -11,7 +11,8 @@ class ThreeDConv(pl.LightningModule):
         super().__init__()
 
         self.mod = ThreeDConvWideFourDeepThreeSkipRGB()
-        self.mse = nn.MSELoss()
+        # self.loss = nn.MSELoss()
+        self.loss = nn.L1Loss()
         self.psnr = PSNR()
         self.ssim = SSIM()
         self.learning_rate = learning_rate
@@ -31,7 +32,7 @@ class ThreeDConv(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         ctx_frames, tgt_frames = batch
         outputs = self.forward(ctx_frames)
-        loss = self.mse(outputs, tgt_frames)
+        loss = self.loss(outputs, tgt_frames)
         self.log('train_loss', loss, 
                  on_step=False, on_epoch=True, prog_bar=True)
 
@@ -40,7 +41,7 @@ class ThreeDConv(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         ctx_frames, tgt_frames = batch
         pred_frames = self.forward(ctx_frames)
-        loss = self.mse(tgt_frames, pred_frames)
+        loss = self.loss(tgt_frames, pred_frames)
         ssim = self.ssim(tgt_frames, pred_frames)
         psnr = self.psnr(tgt_frames, pred_frames)
         self.log_dict(

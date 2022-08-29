@@ -75,7 +75,8 @@ class PredRNN(pl.LightningModule):
         self.num_tgt_frames = num_tgt_frames
         self.learning_rate = learning_rate 
 
-        self.mse = nn.MSELoss()
+        # self.loss = nn.MSELoss()
+        self.loss = nn.L1Loss()
         self.ssim = SSIM()
         self.psnr = PSNR()
 
@@ -135,7 +136,7 @@ class PredRNN(pl.LightningModule):
         ctx_frames, tgt_frames = batch
         all_frames = torch.cat([ctx_frames, tgt_frames], dim=2)
         next_frames = self.forward(all_frames)
-        loss = self.mse(next_frames, all_frames[:, :, 1:])
+        loss = self.loss(next_frames, all_frames[:, :, 1:])
         self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
@@ -146,7 +147,7 @@ class PredRNN(pl.LightningModule):
 
         next_frames = self.forward(all_frames)
 
-        loss = self.mse(next_frames, all_frames[:, :, 1:])
+        loss = self.loss(next_frames, all_frames[:, :, 1:])
         ssim = self.ssim(next_frames, all_frames[:, :, 1:])
         psnr = self.psnr(next_frames, all_frames[:, :, 1:])
         self.log_dict(
