@@ -97,10 +97,13 @@ def make_ten_frame_plot(ctx, tgt, pred, epoch=999):
         ax[0][i].imshow(frame)
         ax[0][i].set_xticks([])
         ax[0][i].set_yticks([])
-
+        
         ax[1][i].imshow(frame)
         ax[1][i].set_xticks([])
         ax[1][i].set_yticks([])
+    
+    ax[0][0].set_ylabel("Ground truth")
+    ax[1][0].set_ylabel("Prediction")
 
     show_frames(tgt_frames, ax[0])
     show_frames(pred_frames, ax[1])
