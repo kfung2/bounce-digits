@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 
-from threed_conv_classes import *
-from models.futuregan_classes import *
+from unused_models.futuregan_classes import *
 
 config = {
     'nframes_pred': 5,
