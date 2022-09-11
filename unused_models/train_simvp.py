@@ -7,7 +7,7 @@ from models import *
 from data.data_classes import *
 
 # Configs
-batch_size = 16
+batch_size = 4
 learning_rate = 1e-3
 epochs = 50
 

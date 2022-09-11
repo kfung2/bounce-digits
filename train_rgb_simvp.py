@@ -11,8 +11,8 @@ batch_size = 4
 learning_rate = 1e-3
 epochs = 100
 
-num_ctx_frames = 5
-num_tgt_frames = 5
+num_ctx_frames = 1
+num_tgt_frames = 9
 split_ratio=[0.4, 0.1, 0.5]
 
 hid_s=64
@@ -27,12 +27,12 @@ height = 128
 width = 128
 input_shape = (channels, num_ctx_frames, height, width)
 
-model = SimVP(input_shape=input_shape, 
-              hid_s=hid_s, hid_t=hid_t, 
-              N_s=N_s, N_t=N_t,
-              kernel_sizes=kernel_sizes, 
-              groups=groups,
-              learning_rate=learning_rate)
+model = SimVP_1to9(input_shape=input_shape, 
+                   hid_s=hid_s, hid_t=hid_t, 
+                   N_s=N_s, N_t=N_t,
+                   kernel_sizes=kernel_sizes, 
+                   groups=groups,
+                   learning_rate=learning_rate)
 
 moving_mnist = TwoColourMovingMNISTDataModule(batch_size, 
                                               num_ctx_frames, num_tgt_frames,

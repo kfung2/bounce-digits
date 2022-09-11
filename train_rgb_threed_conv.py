@@ -11,11 +11,11 @@ batch_size = 4
 learning_rate = 1e-3
 epochs = 100
 
-num_ctx_frames = 5
-num_tgt_frames = 5
+num_ctx_frames = 1
+num_tgt_frames = 9
 split_ratio=[0.4, 0.1, 0.5]
 
-model = ThreeDConv(learning_rate)
+model = ThreeDConv_1to9(learning_rate)
 moving_mnist = TwoColourMovingMNISTDataModule(batch_size, 
                                               num_ctx_frames, num_tgt_frames,
                                               split_ratio=split_ratio)

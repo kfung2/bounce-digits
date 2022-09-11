@@ -4,6 +4,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.strategies.ddp import DDPStrategy
 
 from models import *
+from DRNet import *
 from data.data_classes import *
 
 # Configs

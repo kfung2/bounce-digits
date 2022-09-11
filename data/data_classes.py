@@ -248,6 +248,7 @@ class TwoColourMovingMNISTDataModule(pl.LightningDataModule):
                                                    self.num_tgt_frames,
                                                    self.data_path)
         split = [int(len(full_dataset) * r) for r in self.split_ratio]
+        self.split = split
         train, val, test = random_split(full_dataset, split,
                                         generator=torch.Generator().manual_seed(42))
         self.train = train

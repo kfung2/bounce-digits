@@ -5,7 +5,7 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 
 from models import *
 from data.data_classes import *
-from unused_models.DRNet import DRNetLSTM
+from unused_models.DRNet import *
 
 # Configs
 ckpt_path = "./logs/DRNetMain_RGB/version_0/checkpoints/epoch=49-step=12500.ckpt"
