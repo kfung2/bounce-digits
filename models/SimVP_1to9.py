@@ -191,8 +191,7 @@ class SimVP_1to9(pl.LightningModule):
         self.dec = Decoder(hid_s, C, N_s)
 
         self.learning_rate = learning_rate
-        # self.loss = nn.MSELoss()
-        self.loss = nn.L1Loss()
+        self.loss = nn.MSELoss()
         self.ssim = SSIM()
         self.psnr = PSNR()
 
