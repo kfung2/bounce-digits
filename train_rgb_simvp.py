@@ -38,7 +38,7 @@ moving_mnist = TwoColourMovingMNISTDataModule(batch_size,
                                               num_ctx_frames, num_tgt_frames,
                                               split_ratio=split_ratio)
 
-logger = TensorBoardLogger('./logs', 'SimVP_RGB')
+logger = TensorBoardLogger('./logs', 'SimVP')
 
 trainer = pl.Trainer(gpus=4, 
                      strategy=DDPStrategy(find_unused_parameters=False),
